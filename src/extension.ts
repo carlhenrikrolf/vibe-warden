@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { PermissionDecorationProvider } from './decorations';
 import { PermissionTreeProvider, Node } from './treeProvider';
 import { SettingsStore } from './settingsStore';
-import { CAVEAT } from './render';
+import { CAVEAT } from './glyphs';
 import { TOOLS, Verdict } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {

@@ -23,9 +23,10 @@ F5 launches an Extension Development Host.
 ## Layout & the one rule that matters
 
 - The permission engine is `src/settingsResolver.ts` + `src/matcher.ts` +
-  `src/types.ts`. **These must never import `vscode`** — that keeps the engine
-  unit-testable in plain Node (`test/resolver.test.ts`). Anything touching
-  `vscode` lives in `extension.ts`, `treeProvider.ts`, `fileWalker.ts`,
+  `src/types.ts`, plus the pure description encoding in `src/glyphs.ts`. **These
+  must never import `vscode`** — that keeps them unit-testable in plain Node
+  (`test/resolver.test.ts`, `test/render.test.ts`). Anything touching `vscode`
+  lives in `extension.ts`, `treeProvider.ts`, `fileWalker.ts`,
   `settingsStore.ts`, `render.ts`, `decorations.ts`.
 - `resolvePermissions(relPath, layers)` is the pure core. Evaluation order is
   **deny → ask → allow → default(mode)**, first match wins, merged across all

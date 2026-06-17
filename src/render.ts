@@ -1,25 +1,11 @@
 /**
- * Turns a resolved {@link FilePermissions} into the strings the tree shows:
- * the `description` triple (SPEC §4.2/§4.3) and the `tooltip` breakdown
- * (SPEC §6.4).
+ * The `vscode`-flavoured part of rendering: the `tooltip` breakdown (SPEC §6.4).
+ * The pure `description` encoding lives in glyphs.ts so it can be unit-tested.
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { FilePermissions, Tool, TOOLS, TOOL_KEYWORD, TOOL_LETTER, Verdict } from './types';
-
-export interface GlyphStyle {
-  allow: string;
-  ask: string;
-  deny: string;
-  default: string;
-}
-
-export const DEFAULT_GLYPH_STYLE: GlyphStyle = {
-  allow: '{t}',
-  ask: '{t}?',
-  deny: '!{t}',
-  default: '({t})',
-};
+import { FilePermissions, TOOLS, TOOL_KEYWORD, TOOL_LETTER, Verdict } from './types';
+import { CAVEAT } from './glyphs';
 
 const VERDICT_WORD: Record<Verdict, string> = {
   allow: 'allow',
@@ -27,30 +13,6 @@ const VERDICT_WORD: Record<Verdict, string> = {
   deny: 'deny',
   default: 'inherited (default)',
 };
-
-export const CAVEAT =
-  'Reflects Claude’s file tools. Bash commands and external scripts can bypass these rules.';
-
-function glyph(style: GlyphStyle, verdict: Verdict, tool: Tool): string {
-  const template = style[verdict] ?? DEFAULT_GLYPH_STYLE[verdict];
-  return template.replace(/\{t\}/g, TOOL_LETTER[tool]);
-}
-
-/** The `R  !W  E?`-style triple shown in `TreeItem.description`. */
-export function describe(perms: FilePermissions, style: GlyphStyle = DEFAULT_GLYPH_STYLE): string {
-  return TOOLS.map((tool) => glyph(style, perms[tool], tool)).join('  ');
-}
-
-/** A representative verdict for the whole file (worst case wins), for colour. */
-export function dominantVerdict(perms: FilePermissions): Verdict {
-  const order: Verdict[] = ['deny', 'ask', 'allow', 'default'];
-  for (const v of order) {
-    if (TOOLS.some((tool) => perms[tool] === v)) {
-      return v;
-    }
-  }
-  return 'default';
-}
 
 /** Build the MarkdownString tooltip with per-tool provenance + the caveat. */
 export function tooltip(perms: FilePermissions, relLabel: string, workspaceRoot: string): vscode.MarkdownString {

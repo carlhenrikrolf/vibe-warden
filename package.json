@@ -124,9 +124,9 @@
             "allow": "{t}",
             "ask": "{t}?",
             "deny": "!{t}",
-            "default": "({t})"
+            "default": ""
           },
-          "markdownDescription": "Templates for the permission triple shown in `description`. `{t}` is replaced by the tool letter (R/W/E)."
+          "markdownDescription": "Templates for the permissions shown in `description`. `{t}` is replaced by the tool letter (R/W/E). Leave `default` empty (`\"\"`) to omit unspecified/inherited permissions; set e.g. `\"({t})\"` to show them."
         },
         "vibeWarden.settingsPaths": {
           "type": "object",

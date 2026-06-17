@@ -18,9 +18,12 @@ Each file row carries a permission triple in its description:
 | `R` `W` `E` | **allow** — Claude may read / write / edit |
 | `R?` `W?` `E?` | **ask** — Claude must ask first |
 | `!R` `!W` `!E` | **deny** — Claude may not |
-| `(R)` `(W)` `(E)` | **inherited** — no rule matched; falls back to `defaultMode` |
+| *(omitted)* | **unspecified** — no rule matched (inherited default); shown as nothing |
 
-`R` = Read, `W` = Write (create/overwrite), `E` = Edit (modify existing).
+`R` = Read, `W` = Write (create/overwrite), `E` = Edit (modify existing). Only
+tools with an explicit verdict appear, so `R?` alone means "ask before reading"
+and says nothing about write/edit. A file with no applicable rules shows a blank
+description.
 
 Hover a file for the full breakdown: each tool's verdict, the settings file and
 rule that decided it, and the active `defaultMode`. The inline **Open Deciding
@@ -101,16 +104,19 @@ src/
   settingsStore.ts    per-root layer cache + invalidation
   treeProvider.ts     TreeDataProvider: lazy getChildren, getTreeItem
   fileWalker.ts       directory listing + exclude filtering
-  render.ts           description triple + tooltip markdown
+  glyphs.ts           pure description encoding (vscode-free)
+  render.ts           tooltip markdown (vscode)
   decorations.ts      optional FileDecorationProvider for colour
   types.ts            shared permission-model types
 test/
   fixtures/           sample .claude/settings.json
   resolver.test.ts    SPEC §10 acceptance + edge cases
+  render.test.ts      SPEC §4.3 description encoding
 ```
 
-`settingsResolver.ts` / `matcher.ts` never import `vscode`, so the permission
-engine is unit-testable in plain Node.
+`settingsResolver.ts` / `matcher.ts` / `types.ts` / `glyphs.ts` never import
+`vscode`, so the permission engine and its display encoding are unit-testable in
+plain Node.
 
 ## License
 

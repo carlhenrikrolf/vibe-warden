@@ -7,7 +7,7 @@
  * user opts in, we map the file's dominant verdict to a single ThemeColor.
  */
 import * as vscode from 'vscode';
-import { dominantVerdict } from './render';
+import { dominantVerdict } from './glyphs';
 import { FilePermissions, Verdict } from './types';
 
 const COLOR: Partial<Record<Verdict, vscode.ThemeColor>> = {

@@ -7,7 +7,8 @@
  */
 import * as vscode from 'vscode';
 import { listChildren } from './fileWalker';
-import { describe, DEFAULT_GLYPH_STYLE, GlyphStyle, tooltip } from './render';
+import { describe, DEFAULT_GLYPH_STYLE, GlyphStyle } from './glyphs';
+import { tooltip } from './render';
 import { resolveDefaultMode } from './settingsResolver';
 import { SettingsStore } from './settingsStore';
 import { FilePermissions } from './types';
@@ -149,7 +150,8 @@ export class PermissionTreeProvider implements vscode.TreeDataProvider<Node> {
       item.description = `defaultMode: ${mode}`;
       item.tooltip = new vscode.MarkdownString(
         `Workspace **${node.name}** — Claude Code permission view.\n\n` +
-          `Files show \`R\` read · \`W\` write · \`E\` edit as allow / \`?\` ask / \`!\` deny / \`( )\` inherited.`,
+          `Files show \`R\` read · \`W\` write · \`E\` edit as allow / \`?\` ask / \`!\` deny. ` +
+          `Unspecified (inherited) permissions are omitted.`,
       );
       return item;
     }
