@@ -1,0 +1,8 @@
+node_modules/
+out/
+*.vsix
+.vscode-test/
+.DS_Store
+
+# Personal/local Claude Code settings (not shared)
+.claude/settings.local.json

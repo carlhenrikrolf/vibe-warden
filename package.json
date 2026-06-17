@@ -1,0 +1,173 @@
+{
+  "name": "vibe-warden",
+  "displayName": "Vibe Warden",
+  "description": "See, per file, what Claude Code is allowed to do: read, write, edit — allowed, ask, denied, or inherited.",
+  "version": "0.1.0",
+  "publisher": "vibe-warden",
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "permissions",
+    "agent",
+    "ai"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/carlhenrikrolf/vibe-warden"
+  },
+  "activationEvents": [],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vibeWarden",
+          "title": "Vibe Warden",
+          "icon": "resources/vibe-warden.svg"
+        }
+      ]
+    },
+    "views": {
+      "vibeWarden": [
+        {
+          "id": "vibeWarden.permissionTree",
+          "name": "Permissions",
+          "icon": "resources/vibe-warden.svg",
+          "contextualTitle": "Vibe Warden"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "vibeWarden.permissionTree",
+        "when": "vibeWarden.noWorkspace",
+        "contents": "Open a folder to see what Claude Code is allowed to do to each file.\n[Open Folder](command:workbench.action.files.openFolder)"
+      },
+      {
+        "view": "vibeWarden.permissionTree",
+        "when": "!vibeWarden.noWorkspace && vibeWarden.noSettings",
+        "contents": "No Claude Code permission settings were found.\n\nVibe Warden reads `.claude/settings.json`, `.claude/settings.local.json`, and `~/.claude/settings.json` and shows, per file, whether Claude can read, write, or edit it.\n\nCreate a `.claude/settings.json` with a `permissions` block to get started.\n[Learn about permissions](https://code.claude.com/docs/en/permissions)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "vibeWarden.refresh",
+        "title": "Refresh",
+        "category": "Vibe Warden",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vibeWarden.openDecidingSettings",
+        "title": "Open Deciding Settings",
+        "category": "Vibe Warden",
+        "icon": "$(go-to-file)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "vibeWarden.refresh",
+          "when": "view == vibeWarden.permissionTree",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "vibeWarden.openDecidingSettings",
+          "when": "view == vibeWarden.permissionTree && viewItem == file",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "vibeWarden.openDecidingSettings",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Vibe Warden",
+      "properties": {
+        "vibeWarden.excludeGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "node_modules",
+            ".git",
+            "dist",
+            "out",
+            ".vscode"
+          ],
+          "markdownDescription": "Folders/files to hide from the Vibe Warden tree. Matched as path segments against each entry name."
+        },
+        "vibeWarden.glyphStyle": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allow": { "type": "string" },
+            "ask": { "type": "string" },
+            "deny": { "type": "string" },
+            "default": { "type": "string" }
+          },
+          "default": {
+            "allow": "{t}",
+            "ask": "{t}?",
+            "deny": "!{t}",
+            "default": "({t})"
+          },
+          "markdownDescription": "Templates for the permission triple shown in `description`. `{t}` is replaced by the tool letter (R/W/E)."
+        },
+        "vibeWarden.settingsPaths": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "user": { "type": "string" },
+            "project": { "type": "string" },
+            "local": { "type": "string" },
+            "managed": { "type": "string" }
+          },
+          "default": {},
+          "markdownDescription": "Optional absolute-path overrides for where to read each settings layer. Leave empty to use the standard locations."
+        },
+        "vibeWarden.colorDecorations": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Tint file labels by a representative permission colour using a `FileDecorationProvider`. Off by default because file decorations also appear in the built-in Explorer and editor tabs."
+        },
+        "vibeWarden.maxChildrenPerFolder": {
+          "type": "number",
+          "default": 1000,
+          "markdownDescription": "Cap the number of children rendered per folder. Remaining entries collapse into a single \"show more\" node."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node --test \"out/test/**/*.test.js\"",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "ignore": "^5.3.1",
+    "jsonc-parser": "^3.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
