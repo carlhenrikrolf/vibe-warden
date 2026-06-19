@@ -9,11 +9,20 @@ import * as vscode from 'vscode';
 import { listChildren } from './fileWalker';
 import { describe, DEFAULT_GLYPH_STYLE, GlyphStyle } from './glyphs';
 import { tooltip } from './render';
-import { resolveDefaultMode } from './settingsResolver';
 import { SettingsStore } from './settingsStore';
-import { FilePermissions } from './types';
+import { DefaultMode, FilePermissions, ResolveOptions } from './types';
 
 type NodeKind = 'root' | 'folder' | 'file' | 'more';
+
+/**
+ * Mode-picker state (SPEC §3.6/§4.4). `settings` follows each root's resolved
+ * `defaultMode`; `explicit` suppresses mode-derived defaults; `mode` previews a
+ * specific mode.
+ */
+export type PickState =
+  | { kind: 'settings' }
+  | { kind: 'explicit' }
+  | { kind: 'mode'; mode: DefaultMode };
 
 export interface Node {
   kind: NodeKind;
@@ -34,11 +43,48 @@ export class PermissionTreeProvider implements vscode.TreeDataProvider<Node> {
   /** Per-folder render cap, bumped by the "show more" node. */
   private limits = new Map<string, number>();
 
+  private pick: PickState = { kind: 'settings' };
+
   constructor(private readonly store: SettingsStore) {}
 
   refresh(): void {
     this.limits.clear();
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  setPick(pick: PickState): void {
+    this.pick = pick;
+    this.refresh();
+  }
+
+  getPick(): PickState {
+    return this.pick;
+  }
+
+  /** Resolution options for a root, derived from the current picker state. */
+  optsFor(workspaceRoot: string): ResolveOptions {
+    switch (this.pick.kind) {
+      case 'explicit':
+        return { mode: this.store.defaultMode(workspaceRoot), showModeDefaults: false };
+      case 'mode':
+        return { mode: this.pick.mode, showModeDefaults: true };
+      case 'settings':
+      default:
+        return { mode: this.store.defaultMode(workspaceRoot), showModeDefaults: true };
+    }
+  }
+
+  /** Short label of the active picker state, shown in the root description. */
+  pickLabel(workspaceRoot: string): string {
+    switch (this.pick.kind) {
+      case 'explicit':
+        return 'explicit rules only';
+      case 'mode':
+        return `mode: ${this.pick.mode}`;
+      case 'settings':
+      default:
+        return `mode: ${this.store.defaultMode(workspaceRoot)} (settings)`;
+    }
   }
 
   // ---- config helpers -----------------------------------------------------
@@ -68,7 +114,7 @@ export class PermissionTreeProvider implements vscode.TreeDataProvider<Node> {
     if (!folder) {
       return undefined;
     }
-    return this.store.resolveFile(uri.fsPath, folder.uri.fsPath);
+    return this.store.resolveFile(uri.fsPath, folder.uri.fsPath, this.optsFor(folder.uri.fsPath));
   }
 
   // ---- TreeDataProvider ---------------------------------------------------
@@ -146,12 +192,11 @@ export class PermissionTreeProvider implements vscode.TreeDataProvider<Node> {
       const item = new vscode.TreeItem(node.name, vscode.TreeItemCollapsibleState.Collapsed);
       item.contextValue = 'root';
       item.iconPath = new vscode.ThemeIcon('root-folder');
-      const { mode } = resolveDefaultMode(this.store.layersFor(node.workspaceRoot));
-      item.description = `defaultMode: ${mode}`;
+      item.description = this.pickLabel(node.workspaceRoot);
       item.tooltip = new vscode.MarkdownString(
-        `Workspace **${node.name}** — Claude Code permission view.\n\n` +
+        `Workspace **${node.name}** — Claude Code permission view (${this.pickLabel(node.workspaceRoot)}).\n\n` +
           `Files show \`R\` read · \`W\` write · \`E\` edit as allow / \`?\` ask / \`!\` deny. ` +
-          `Unspecified (inherited) permissions are omitted.`,
+          `\`( )\` = tool-only · \`[ ]\` = Bash-only. Unspecified permissions are omitted.`,
       );
       return item;
     }
@@ -168,7 +213,7 @@ export class PermissionTreeProvider implements vscode.TreeDataProvider<Node> {
     // resourceUri (set via the constructor) gives the native file icon and
     // click-to-open; we keep the permission info in `description`, not a badge
     // (SPEC §4.2 trade-off note).
-    const perms = this.store.resolveFile(node.uri.fsPath, node.workspaceRoot);
+    const perms = this.store.resolveFile(node.uri.fsPath, node.workspaceRoot, this.optsFor(node.workspaceRoot));
     item.description = describe(perms, this.glyphStyle);
     item.tooltip = tooltip(perms, this.relLabel(node), node.workspaceRoot);
     item.command = {

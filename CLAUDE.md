@@ -23,14 +23,17 @@ F5 launches an Extension Development Host.
 ## Layout & the one rule that matters
 
 - The permission engine is `src/settingsResolver.ts` + `src/matcher.ts` +
-  `src/types.ts`, plus the pure description encoding in `src/glyphs.ts`. **These
-  must never import `vscode`** — that keeps them unit-testable in plain Node
-  (`test/resolver.test.ts`, `test/render.test.ts`). Anything touching `vscode`
-  lives in `extension.ts`, `treeProvider.ts`, `fileWalker.ts`,
-  `settingsStore.ts`, `render.ts`, `decorations.ts`.
-- `resolvePermissions(relPath, layers)` is the pure core. Evaluation order is
-  **deny → ask → allow → default(mode)**, first match wins, merged across all
-  layers (SPEC §3.3). Don't reorder this without updating the fixtures.
+  `src/types.ts` + `src/channels.ts` + `src/protectedPaths.ts`, plus the pure
+  description encoding in `src/glyphs.ts`. **These must never import `vscode`** —
+  that keeps them unit-testable in plain Node (`test/resolver.test.ts`,
+  `test/render.test.ts`). Anything touching `vscode` lives in `extension.ts`,
+  `treeProvider.ts`, `fileWalker.ts`, `settingsStore.ts`, `render.ts`,
+  `decorations.ts`.
+- `resolvePermissions(fileAbs, ctx, layers, opts)` is the pure core. The **tool
+  channel** evaluates **deny → ask → allow → default(mode)** (first match wins,
+  merged across layers, SPEC §3.3), then the protected-path floor; the **Bash
+  channel** comes from the sandbox (SPEC §3.8). `channels.combine()` merges them
+  into the display verdict + bracket. Don't reorder without updating fixtures.
 
 ## When changing the permission model
 

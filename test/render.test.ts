@@ -1,58 +1,79 @@
 /**
- * Tests for the description encoding (SPEC §4.3) — in particular that
- * unspecified (inherited) permissions are omitted, not shown. Runs in plain
- * Node because glyphs.ts is `vscode`-free.
+ * Tests for the description encoding (SPEC §4.3): omission of unspecified
+ * permissions and the `( )` / `[ ]` channel brackets. Runs in plain Node
+ * because glyphs.ts / channels.ts are `vscode`-free.
  */
 import { describe as suite, it } from 'node:test';
 import * as assert from 'node:assert';
-import { describe, dominantVerdict, DEFAULT_GLYPH_STYLE } from '../src/glyphs';
-import { FilePermissions, Tool, ToolResolution, Verdict } from '../src/types';
+import { combine } from '../src/channels';
+import { describe, dominantVerdict } from '../src/glyphs';
+import { BashVerdict, FilePermissions, Tool, ToolResolution, Verdict } from '../src/types';
 
-/** Build a FilePermissions from a verdict triple, with throwaway details. */
-function perms(read: Verdict, write: Verdict, edit: Verdict): FilePermissions {
-  const detail = (v: Verdict): ToolResolution => ({ verdict: v, reason: 'rule' });
-  const details = { read: detail(read), write: detail(write), edit: detail(edit) } as Record<
-    Tool,
-    ToolResolution
-  >;
-  return { read, write, edit, details };
+function res(toolV: Verdict, bashV: BashVerdict): ToolResolution {
+  const c = combine(toolV, bashV);
+  return {
+    verdict: toolV,
+    reason: 'rule',
+    bash: bashV,
+    bashReason: bashV === 'na' ? 'off' : 'sandbox',
+    display: c.display,
+    wrap: c.wrap,
+    shown: c.shown,
+  };
 }
 
-suite('describe() — unspecified permissions are omitted (SPEC §4.3)', () => {
-  it('shows only tools with an explicit verdict', () => {
-    assert.strictEqual(describe(perms('deny', 'default', 'ask')), '!R  E?');
-  });
+function fp(
+  read: [Verdict, BashVerdict],
+  write: [Verdict, BashVerdict],
+  edit: [Verdict, BashVerdict],
+): FilePermissions {
+  const details = { read: res(...read), write: res(...write), edit: res(...edit) } as Record<Tool, ToolResolution>;
+  return { read: details.read.verdict, write: details.write.verdict, edit: details.edit.verdict, details };
+}
 
-  it('renders an empty string when everything is inherited', () => {
-    assert.strictEqual(describe(perms('default', 'default', 'default')), '');
-  });
+const OFF: BashVerdict = 'na';
+const INHERIT: [Verdict, BashVerdict] = ['default', OFF];
 
-  it('drops the gap for a middle (write) default — no double spaces', () => {
-    assert.strictEqual(describe(perms('allow', 'default', 'allow')), 'R  E');
+suite('describe() — omission (SPEC §4.3)', () => {
+  it('inherited + open Bash → omitted', () => {
+    assert.strictEqual(describe(fp(INHERIT, INHERIT, INHERIT)), '');
   });
-
-  it('shows a full triple when all three are specified', () => {
-    assert.strictEqual(describe(perms('allow', 'deny', 'ask')), 'R  !W  E?');
+  it('only tools with something to show appear, no gaps', () => {
+    assert.strictEqual(describe(fp(['deny', OFF], INHERIT, ['ask', OFF])), '(!R)  (E?)');
   });
-
-  it('R? alone means ask-on-read and nothing about write/edit', () => {
-    assert.strictEqual(describe(perms('ask', 'default', 'default')), 'R?');
+  it('explicit allow shows; R? alone says nothing about W/E', () => {
+    assert.strictEqual(describe(fp(['ask', OFF], INHERIT, INHERIT)), '(R?)');
+    assert.strictEqual(describe(fp(['allow', 'allow'], INHERIT, INHERIT)), 'R');
   });
+});
 
-  it('honours a custom glyph style that re-enables the default marker', () => {
-    const style = { ...DEFAULT_GLYPH_STYLE, default: '({t})' };
-    assert.strictEqual(describe(perms('allow', 'default', 'default'), style), 'R  (W)  (E)');
+suite('describe() — channel brackets (SPEC §3.8/§4.3)', () => {
+  it('both channels deny → no bracket', () => {
+    assert.strictEqual(describe(fp(INHERIT, ['deny', 'deny'], INHERIT)), '!W');
+  });
+  it('tool-only deny (sandbox off) → ( )', () => {
+    assert.strictEqual(describe(fp(INHERIT, ['deny', OFF], INHERIT)), '(!W)');
+  });
+  it('tool-only deny (sandbox on, Bash allows) → ( )', () => {
+    assert.strictEqual(describe(fp(INHERIT, ['deny', 'allow'], INHERIT)), '(!W)');
+  });
+  it('Bash-only deny (tool open) → [ ]', () => {
+    assert.strictEqual(describe(fp(INHERIT, ['allow', 'deny'], INHERIT)), '[!W]');
+    assert.strictEqual(describe(fp(INHERIT, ['default', 'deny'], INHERIT)), '[!W]');
+  });
+  it('tool asks + Bash denies → mismatched ( … ]', () => {
+    assert.strictEqual(describe(fp(INHERIT, ['ask', 'deny'], INHERIT)), '(!W]');
+  });
+  it('combined row', () => {
+    assert.strictEqual(describe(fp(['deny', 'deny'], ['allow', 'deny'], INHERIT)), '!R  [!W]');
   });
 });
 
 suite('dominantVerdict() — colour selection', () => {
   it('deny wins over ask/allow', () => {
-    assert.strictEqual(dominantVerdict(perms('allow', 'ask', 'deny')), 'deny');
-  });
-  it('ask wins over allow', () => {
-    assert.strictEqual(dominantVerdict(perms('allow', 'ask', 'allow')), 'ask');
+    assert.strictEqual(dominantVerdict(fp(['allow', 'allow'], ['ask', OFF], ['deny', OFF])), 'deny');
   });
   it('all-inherited is default', () => {
-    assert.strictEqual(dominantVerdict(perms('default', 'default', 'default')), 'default');
+    assert.strictEqual(dominantVerdict(fp(INHERIT, INHERIT, INHERIT)), 'default');
   });
 });

@@ -4,7 +4,7 @@
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { FilePermissions, TOOLS, TOOL_KEYWORD, TOOL_LETTER, Verdict } from './types';
+import { BashVerdict, FilePermissions, TOOLS, TOOL_KEYWORD, TOOL_LETTER, Verdict } from './types';
 import { CAVEAT } from './glyphs';
 
 const VERDICT_WORD: Record<Verdict, string> = {
@@ -14,7 +14,13 @@ const VERDICT_WORD: Record<Verdict, string> = {
   default: 'inherited (default)',
 };
 
-/** Build the MarkdownString tooltip with per-tool provenance + the caveat. */
+const BASH_WORD: Record<BashVerdict, string> = {
+  allow: 'allow',
+  deny: 'deny',
+  na: 'unconstrained (sandbox off)',
+};
+
+/** Build the MarkdownString tooltip: per-tool, both channels + the caveat. */
 export function tooltip(perms: FilePermissions, relLabel: string, workspaceRoot: string): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.supportThemeIcons = true;
@@ -22,20 +28,32 @@ export function tooltip(perms: FilePermissions, relLabel: string, workspaceRoot:
 
   for (const tool of TOOLS) {
     const d = perms.details[tool];
-    const keyword = TOOL_KEYWORD[tool];
-    let line = `\`${TOOL_LETTER[tool]}\` **${keyword}** — ${VERDICT_WORD[d.verdict]}`;
+    md.appendMarkdown(`\`${TOOL_LETTER[tool]}\` **${TOOL_KEYWORD[tool]}**\n\n`);
+
+    // Tool channel.
+    let toolLine = `— tool: ${VERDICT_WORD[d.verdict]}`;
     if (d.reason === 'rule' && d.rule) {
-      line += `  ·  matched \`${code(d.rule)}\``;
+      toolLine += ` · \`${code(d.rule)}\``;
       if (d.sourceFile) {
-        line += ` in \`${code(shorten(d.sourceFile, workspaceRoot))}\``;
+        toolLine += ` in \`${code(shorten(d.sourceFile, workspaceRoot))}\``;
       }
+    } else if (d.reason === 'protected') {
+      toolLine += ' · protected path (cannot be allow-listed)';
     } else if (d.reason === 'defaultMode') {
-      line += `  ·  no rule, \`defaultMode: ${code(d.mode ?? 'default')}\``;
-      if (d.sourceFile) {
-        line += ` (\`${code(shorten(d.sourceFile, workspaceRoot))}\`)`;
-      }
+      toolLine += ` · from \`defaultMode: ${code(d.mode ?? 'default')}\``;
     }
-    md.appendMarkdown(`${line}\n\n`);
+    if (d.protectedPath && d.reason !== 'protected') {
+      toolLine += ' · protected path';
+    }
+    md.appendMarkdown(`${toolLine}\n\n`);
+
+    // Bash / sandbox channel.
+    let bashLine = `— bash: ${BASH_WORD[d.bash]}`;
+    if (d.bash === 'deny' && d.bashRule) {
+      const kind = d.bashReason === 'merged' ? 'merged rule' : 'sandbox';
+      bashLine += ` · ${kind} \`${code(d.bashRule)}\``;
+    }
+    md.appendMarkdown(`${bashLine}\n\n`);
   }
 
   md.appendMarkdown(`---\n\n_${escapeMd(CAVEAT)}_`);

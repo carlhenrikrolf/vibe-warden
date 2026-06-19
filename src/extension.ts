@@ -5,10 +5,12 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { PermissionDecorationProvider } from './decorations';
-import { PermissionTreeProvider, Node } from './treeProvider';
+import { PermissionTreeProvider, Node, PickState } from './treeProvider';
 import { SettingsStore } from './settingsStore';
 import { CAVEAT } from './glyphs';
-import { TOOLS, Verdict } from './types';
+import { DefaultMode, DEFAULT_MODES, TOOLS, Verdict } from './types';
+
+const PICK_KEY = 'vibeWarden.pick';
 
 export function activate(context: vscode.ExtensionContext): void {
   const store = new SettingsStore();
@@ -19,6 +21,17 @@ export function activate(context: vscode.ExtensionContext): void {
     showCollapseAll: true,
   });
   context.subscriptions.push(view);
+
+  // Restore the mode-picker choice for this workspace.
+  const savedPick = context.workspaceState.get<PickState>(PICK_KEY);
+  if (savedPick) {
+    tree.setPick(savedPick);
+  }
+  const syncViewDescription = () => {
+    const root = (vscode.workspace.workspaceFolders ?? [])[0]?.uri.fsPath ?? '';
+    view.description = tree.pickLabel(root);
+  };
+  syncViewDescription();
 
   // Optional colour decorations, toggled by config (see decorations.ts).
   const decorations = new PermissionDecorationProvider((uri) => tree.permissionsFor(uri));
@@ -41,6 +54,7 @@ export function activate(context: vscode.ExtensionContext): void {
     updateContextKeys(store);
     tree.refresh();
     decorations.refresh();
+    syncViewDescription();
   };
 
   // ---- commands -----------------------------------------------------------
@@ -51,6 +65,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('vibeWarden.openDecidingSettings', (node?: Node) =>
       openDecidingSettings(tree, node),
     ),
+    vscode.commands.registerCommand('vibeWarden.pickMode', async () => {
+      const pick = await pickMode();
+      if (pick) {
+        tree.setPick(pick);
+        await context.workspaceState.update(PICK_KEY, pick);
+        decorations.refresh();
+        syncViewDescription();
+      }
+    }),
   );
 
   // ---- watchers (SPEC §6.1) ----------------------------------------------
@@ -92,6 +115,36 @@ export function deactivate(): void {
 
 function workspaceRoots(): string[] {
   return (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+}
+
+interface ModePick extends vscode.QuickPickItem {
+  pick: PickState;
+}
+
+/** QuickPick for the tree's preview mode (SPEC §4.4). */
+async function pickMode(): Promise<PickState | undefined> {
+  const items: ModePick[] = [
+    {
+      label: 'Explicit rules only',
+      description: 'hide everything a mode would add',
+      pick: { kind: 'explicit' },
+    },
+    {
+      label: 'Follow settings',
+      description: 'use the resolved defaultMode',
+      pick: { kind: 'settings' },
+    },
+    { label: 'Preview a mode', kind: vscode.QuickPickItemKind.Separator, pick: { kind: 'settings' } },
+    ...DEFAULT_MODES.map((mode: DefaultMode) => ({
+      label: mode,
+      pick: { kind: 'mode', mode } as PickState,
+    })),
+  ];
+  const chosen = await vscode.window.showQuickPick(items, {
+    title: 'Vibe Warden — resolve the tree against…',
+    placeHolder: 'Pick a permission mode to preview',
+  });
+  return chosen?.pick;
 }
 
 function updateContextKeys(store: SettingsStore): void {

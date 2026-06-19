@@ -70,14 +70,25 @@
         "title": "Open Deciding Settings",
         "category": "Vibe Warden",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "vibeWarden.pickMode",
+        "title": "Preview Mode…",
+        "category": "Vibe Warden",
+        "icon": "$(filter)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "vibeWarden.pickMode",
+          "when": "view == vibeWarden.permissionTree",
+          "group": "navigation@1"
+        },
+        {
           "command": "vibeWarden.refresh",
           "when": "view == vibeWarden.permissionTree",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [

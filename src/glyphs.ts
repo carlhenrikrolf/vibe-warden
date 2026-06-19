@@ -1,12 +1,9 @@
 /**
- * The `description` encoding (SPEC §4.2/§4.3): turning a resolved
- * {@link FilePermissions} into the compact glyph string, plus the colour helper.
- *
- * No `vscode` import — this is pure string logic so it can be unit-tested in
- * plain Node (see test/render.test.ts). The `vscode`-flavoured tooltip lives in
- * render.ts.
+ * The `description` encoding (SPEC §4.3): the compact glyph string, including
+ * the `( )` / `[ ]` brackets that mark single-channel restrictions, plus the
+ * colour helper. Pure; no `vscode` import (unit-tested in test/render.test.ts).
  */
-import { FilePermissions, Tool, TOOLS, TOOL_LETTER, Verdict } from './types';
+import { FilePermissions, Tool, TOOLS, TOOL_LETTER, Verdict, Wrap } from './types';
 
 export interface GlyphStyle {
   allow: string;
@@ -19,25 +16,40 @@ export const DEFAULT_GLYPH_STYLE: GlyphStyle = {
   allow: '{t}',
   ask: '{t}?',
   deny: '!{t}',
-  // Unspecified / inherited permissions are omitted entirely (SPEC §4.3).
   default: '',
 };
 
-export const CAVEAT =
-  'Reflects Claude’s file tools. Bash commands and external scripts can bypass these rules.';
+/** Brackets per wrap: [left, right]. Mismatched pair flags differing channels. */
+export const BRACKETS: Record<Wrap, [string, string]> = {
+  none: ['', ''],
+  tool: ['(', ')'],
+  bash: ['[', ']'],
+  mixed: ['(', ']'],
+};
 
-function glyph(style: GlyphStyle, verdict: Verdict, tool: Tool): string {
+export const CAVEAT =
+  'Reflects Claude’s file tools and the Bash sandbox. With the sandbox off, Bash commands can bypass the tool rules.';
+
+function glyph(style: GlyphStyle, verdict: Verdict, tool: Tool, wrap: Wrap): string {
   const template = style[verdict] ?? DEFAULT_GLYPH_STYLE[verdict];
-  return template.replace(/\{t\}/g, TOOL_LETTER[tool]);
+  const body = template.replace(/\{t\}/g, TOOL_LETTER[tool]);
+  if (body === '') {
+    return '';
+  }
+  const [l, r] = BRACKETS[wrap] ?? ['', ''];
+  return `${l}${body}${r}`;
 }
 
 /**
- * The `!R  E?`-style display shown in `TreeItem.description`. Only tools with an
- * explicit verdict appear; inherited (`default`) tools render as the empty
- * string and are dropped, so there are no gaps (SPEC §4.3).
+ * The `!W  [!R]`-style display shown in `TreeItem.description`. Only tools with
+ * something to show appear; brackets mark single-channel restrictions
+ * (SPEC §3.8/§4.3).
  */
 export function describe(perms: FilePermissions, style: GlyphStyle = DEFAULT_GLYPH_STYLE): string {
-  return TOOLS.map((tool) => glyph(style, perms[tool], tool))
+  return TOOLS.map((tool) => {
+    const d = perms.details[tool];
+    return d.shown ? glyph(style, d.display, tool, d.wrap) : '';
+  })
     .filter((g) => g !== '')
     .join('  ');
 }
@@ -46,7 +58,7 @@ export function describe(perms: FilePermissions, style: GlyphStyle = DEFAULT_GLY
 export function dominantVerdict(perms: FilePermissions): Verdict {
   const order: Verdict[] = ['deny', 'ask', 'allow', 'default'];
   for (const v of order) {
-    if (TOOLS.some((tool) => perms[tool] === v)) {
+    if (TOOLS.some((tool) => perms.details[tool].shown && perms.details[tool].display === v)) {
       return v;
     }
   }

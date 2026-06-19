@@ -25,9 +25,23 @@ tools with an explicit verdict appear, so `R?` alone means "ask before reading"
 and says nothing about write/edit. A file with no applicable rules shows a blank
 description.
 
-Hover a file for the full breakdown: each tool's verdict, the settings file and
-rule that decided it, and the active `defaultMode`. The inline **Open Deciding
-Settings** action jumps to that rule.
+**Two channels.** A file can be touched by Claude's file tools *or* by Bash
+subprocesses (constrained by the sandbox). Brackets show when a restriction hits
+only one channel:
+
+| Glyph | Meaning |
+|------|---------|
+| `!W` | neither the Write tool nor Bash can write |
+| `(!W)` | **tool-only** — the Write tool can't, but a Bash command can (sandbox off, or sandbox allows it) |
+| `[!W]` | **Bash-only** — a Bash command can't, but the Write tool can |
+| `(!W]` | tool *asks*, Bash *denies* (mismatched) |
+
+**Mode picker** (toolbar funnel icon): choose which permission mode the tree is
+resolved against, or *Explicit rules only* to hide everything a mode would add.
+
+Hover a file for the full per-channel breakdown — tool verdict + deciding rule,
+Bash/sandbox verdict, and protected-path notes. The inline **Open Deciding
+Settings** action jumps to the rule.
 
 ## How permissions are resolved
 
@@ -44,14 +58,21 @@ in order — **deny → ask → allow** — and the first match wins; otherwise 
 outcome comes from `defaultMode`. So **deny always wins**, an `ask` match
 prompts even when a more specific `allow` exists, and a user-level `deny` can't
 be overridden by a project-level `allow`. Patterns use the gitignore glob spec
-via the [`ignore`](https://www.npmjs.com/package/ignore) package.
+via the [`ignore`](https://www.npmjs.com/package/ignore) package, with Claude's
+anchors (`//` absolute, `~/` home, `/` project-root, `./` cwd).
+
+On top of that, Vibe Warden also models the **sandbox** (`sandbox.filesystem`)
+to resolve the Bash channel, the built-in **protected paths** (e.g. `.claude/`,
+`.git/` — writes always prompt and can't be allow-listed), and the active
+**permission mode**.
 
 ## Caveats
 
-- **Advisory, not enforcing.** These verdicts reflect Claude's file tools
-  (`Read`/`Write`/`Edit`). A subprocess launched via `Bash` can still open files
-  directly — the tree shows *intent*, not a guarantee. `Bash(...)` rules are not
-  surfaced because they aren't reliably path-resolvable.
+- **Advisory, not enforcing.** These verdicts reflect Claude's file tools and
+  the Bash sandbox boundary. With the sandbox **off**, a Bash subprocess can
+  open files directly regardless of the tool rules — the tree shows *intent*,
+  not a guarantee. `Bash(...)` *command* rules are not surfaced (they match
+  command strings, not paths).
 - The resolver may drift as Anthropic updates the permission engine. It's pinned
   to the published docs and covered by fixtures (`npm test`); please file an
   issue if you spot a mismatch.
@@ -69,6 +90,8 @@ via the [`ignore`](https://www.npmjs.com/package/ignore) package.
 ## Commands
 
 - **Vibe Warden: Refresh** — re-read settings and rebuild the tree.
+- **Vibe Warden: Preview Mode…** — pick which permission mode the tree resolves
+  against, or *Explicit rules only*.
 - **Vibe Warden: Open Deciding Settings** — open the settings file + rule that
   decided the selected file (inline action on file rows).
 
@@ -98,25 +121,27 @@ Warden loaded.
 
 ```
 src/
-  extension.ts        activate(): view, decorations, commands, watchers
-  settingsResolver.ts load + merge layers; resolve(path) -> {read,write,edit}
-  matcher.ts          gitignore-style matching via `ignore`
+  extension.ts        activate(): view, decorations, commands, watchers, mode picker
+  settingsResolver.ts load + merge layers; resolvePermissions(fileAbs, ctx, layers, opts)
+  matcher.ts          anchor-aware gitignore matching (perm + sandbox syntax)
+  channels.ts         Bash/sandbox channel + two-channel combine
+  protectedPaths.ts   always-on protected-write floor
   settingsStore.ts    per-root layer cache + invalidation
-  treeProvider.ts     TreeDataProvider: lazy getChildren, getTreeItem
+  treeProvider.ts     TreeDataProvider: lazy getChildren, mode-picker state
   fileWalker.ts       directory listing + exclude filtering
-  glyphs.ts           pure description encoding (vscode-free)
+  glyphs.ts           pure description encoding incl. brackets (vscode-free)
   render.ts           tooltip markdown (vscode)
   decorations.ts      optional FileDecorationProvider for colour
   types.ts            shared permission-model types
 test/
   fixtures/           sample .claude/settings.json
-  resolver.test.ts    SPEC §10 acceptance + edge cases
-  render.test.ts      SPEC §4.3 description encoding
+  resolver.test.ts    acceptance + channels/sandbox/protected/mode
+  render.test.ts      description encoding (omission + brackets)
 ```
 
-`settingsResolver.ts` / `matcher.ts` / `types.ts` / `glyphs.ts` never import
-`vscode`, so the permission engine and its display encoding are unit-testable in
-plain Node.
+`settingsResolver.ts`, `matcher.ts`, `channels.ts`, `protectedPaths.ts`,
+`types.ts` and `glyphs.ts` never import `vscode`, so the permission engine and
+its display encoding are unit-testable in plain Node.
 
 ## License
 
